@@ -1,0 +1,25 @@
+[project]
+name = "checkstock"
+version = "1.0.0"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi==0.162.5",
+    "uvicorn==0.54.0",
+    "sqlalchemy==2.0.57",
+    "psycopg[binary]==3.3.9",
+    "alembic==1.20.1",
+]
+
+[project.optional-dependencies]
+test = ["pytest==9.2.0", "httpx2==2.16.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q -p no:cacheprovider"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
