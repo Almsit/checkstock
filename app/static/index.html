@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>CheckStock — складской учёт</title>
+    <link rel="icon" href="/static/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/css/app.css" />
+    <script type="module" src="/static/js/app.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="CheckStock, главная">
+        <span class="brand-mark" aria-hidden="true">c<span>✓</span></span>
+        <span>CheckStock<small>Складской учёт</small></span>
+      </a>
+      <div class="store">
+        <span class="store-icon" aria-hidden="true">Р</span
+        ><span>Магазин Ракета<small>Один магазин · все фулфилменты</small></span>
+      </div>
+    </header>
+
+    <main>
+      <div class="page-heading">
+        <div>
+          <p class="eyebrow">ТОВАРЫ И ДВИЖЕНИЯ</p>
+          <h1>Где сейчас товар</h1>
+          <p class="subtitle">Остатки, резервы и отправки в одном месте.</p>
+        </div>
+        <div class="heading-actions">
+          <button id="refresh" class="button secondary" type="button">Обновить</button
+          ><button id="new-operation" class="button primary" type="button">
+            <span aria-hidden="true">＋</span> Новая операция
+          </button>
+        </div>
+      </div>
+
+      <div id="page-error" class="notice error" role="alert" hidden></div>
+      <section id="summary" class="summary" aria-label="Сводные остатки" aria-busy="true">
+        <article class="metric">
+          <span>Физически на ФФ</span><strong id="total-on-hand">—</strong
+          ><small>Включая резерв</small>
+        </article>
+        <article class="metric available">
+          <span>Свободно на ФФ</span><strong id="total-available">—</strong
+          ><small>Физический остаток минус резерв</small>
+        </article>
+        <article class="metric">
+          <span>В резерве FBS</span><strong id="total-reserved">—</strong
+          ><small>Ожидает отправки клиенту</small>
+        </article>
+        <article class="metric">
+          <span>Всего в пути</span><strong id="total-transit">—</strong
+          ><small>Уже покинуло фулфилменты</small>
+        </article>
+      </section>
+
+      <div class="transit-strip" aria-label="Товар в пути">
+        <div>
+          <span class="route-icon" aria-hidden="true">⇄</span><span>Между ФФ</span
+          ><strong id="total-transfer">—</strong>
+        </div>
+        <div>
+          <span class="route-icon" aria-hidden="true">↗</span><span>На маркетплейс · FBO</span
+          ><strong id="total-fbo">—</strong>
+        </div>
+        <div>
+          <span class="route-icon" aria-hidden="true">→</span><span>К клиенту · FBS</span
+          ><strong id="total-fbs">—</strong>
+        </div>
+      </div>
+
+      <nav class="tabs" aria-label="Разделы учёта">
+        <button type="button" class="tab active" data-panel="stock" aria-current="page">
+          Остатки
+        </button>
+        <button type="button" class="tab" data-panel="movements">В работе</button>
+        <button type="button" class="tab" data-panel="history">История операций</button>
+        <button type="button" class="tab" data-panel="warehouses">Фулфилменты</button>
+      </nav>
+
+      <section id="panel-stock" class="panel" aria-labelledby="stock-title">
+        <div class="panel-heading">
+          <div>
+            <h2 id="stock-title">Остатки по артикулам</h2>
+            <p>Физический остаток и резерв показаны отдельно для каждого ФФ.</p>
+          </div>
+          <label class="search"
+            ><span class="sr-only">Поиск товара или артикула</span
+            ><input id="stock-search" type="search" placeholder="Товар или артикул" maxlength="160"
+          /></label>
+        </div>
+        <div
+          id="stock-table"
+          class="table-scroll"
+          tabindex="0"
+          role="region"
+          aria-label="Таблица остатков"
+        ></div>
+        <p class="scroll-hint">
+          Прокрутите таблицу вправо, чтобы увидеть остальные ФФ и товар в пути.
+        </p>
+        <div class="panel-footer">
+          <span>Резерв входит в физический остаток. Товар в пути в остаток ФФ не входит.</span
+          ><span id="product-count"></span>
+        </div>
+        <div id="stock-pagination" class="pagination" hidden>
+          <button id="previous-stock" class="button secondary" type="button">Назад</button
+          ><button id="next-stock" class="button secondary" type="button">Следующие товары</button>
+        </div>
+        <div id="archive-note" class="notice" hidden>
+          Архивные ФФ остаются в учёте. Их свободный товар можно переместить на действующий склад.
+        </div>
+        <div id="completed-products" class="completed-products" hidden></div>
+      </section>
+
+      <section id="panel-movements" class="panel" aria-labelledby="movements-title" hidden>
+        <div class="panel-heading">
+          <div>
+            <h2 id="movements-title">Операции в работе</h2>
+            <p>Подтвердите отправку, приёмку или доставку. Резерв можно отменить до отправки.</p>
+          </div>
+        </div>
+        <div id="movement-list" class="movement-list"></div>
+        <div class="load-more">
+          <button id="more-movements" class="button secondary" type="button" hidden>
+            Показать ещё
+          </button>
+        </div>
+        <div id="completed-totals" class="panel-footer"></div>
+      </section>
+
+      <section id="panel-history" class="panel" aria-labelledby="history-title" hidden>
+        <div class="panel-heading">
+          <div>
+            <h2 id="history-title">История операций</h2>
+            <p>Приходы, резервы, отправки и подтверждения. Новые записи сверху.</p>
+          </div>
+        </div>
+        <div class="table-scroll" tabindex="0" role="region" aria-label="Журнал операций">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Дата и действие</th>
+                <th>Товар</th>
+                <th>Маршрут</th>
+                <th class="numeric">Кол-во</th>
+                <th>Документ</th>
+              </tr>
+            </thead>
+            <tbody id="history-list"></tbody>
+          </table>
+        </div>
+        <div class="load-more">
+          <button id="more-history" class="button secondary" type="button" hidden>
+            Показать ещё
+          </button>
+        </div>
+      </section>
+
+      <section id="panel-warehouses" class="panel" aria-labelledby="warehouses-title" hidden>
+        <div class="panel-heading">
+          <div>
+            <h2 id="warehouses-title">Фулфилменты</h2>
+            <p>Удаление переводит ФФ в архив. Остатки и история сохраняются.</p>
+          </div>
+          <button id="new-warehouse" class="button secondary" type="button">Добавить ФФ</button>
+        </div>
+        <div id="warehouse-list" class="warehouse-list"></div>
+      </section>
+      <footer class="footer">
+        <span>CheckStock</span><span id="updated-at" role="status">Загрузка данных…</span>
+      </footer>
+    </main>
+
+    <dialog id="operation-dialog" aria-labelledby="operation-title">
+      <form id="operation-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">ДВИЖЕНИЕ ТОВАРА</p>
+            <h2 id="operation-title">Новая операция</h2>
+          </div>
+          <button class="close-button" type="button" data-close aria-label="Закрыть">×</button>
+        </div>
+        <fieldset class="kind-picker">
+          <legend class="sr-only">Вид операции</legend>
+          <label
+            ><input type="radio" name="kind" value="receipt" checked /><span>Приход</span></label
+          ><label><input type="radio" name="kind" value="transfer" /><span>Перемещение</span></label
+          ><label><input type="radio" name="kind" value="fbs" /><span>Резерв FBS</span></label
+          ><label><input type="radio" name="kind" value="fbo" /><span>Отправка FBO</span></label>
+        </fieldset>
+        <p id="operation-description" class="form-description"></p>
+        <label class="field"
+          >Найти товар<input
+            type="search"
+            name="product_search"
+            maxlength="160"
+            placeholder="Название или артикул"
+            autocomplete="off"
+        /></label>
+        <label class="field">Товар<select name="product_id" required></select></label>
+        <div class="form-row">
+          <label class="field" id="source-field"
+            >Откуда · ФФ<select name="source_id"></select
+          ></label>
+          <label class="field" id="destination-field"
+            >Куда · ФФ<select name="destination_id"></select
+          ></label>
+          <label class="field" id="external-field" hidden
+            ><span id="external-label">Получатель</span
+            ><input name="destination" maxlength="120" autocomplete="off"
+          /></label>
+        </div>
+        <p id="balance-hint" class="balance-hint"></p>
+        <div class="form-row">
+          <label class="field"
+            >Количество, шт.<input
+              name="quantity"
+              type="number"
+              min="1"
+              max="1000000"
+              step="1"
+              value="1"
+              inputmode="numeric"
+              required /></label
+          ><label class="field"
+            >Документ / заказ <span class="optional">необязательно</span
+            ><input
+              name="reference"
+              maxlength="80"
+              placeholder="Например, WB-1042"
+              autocomplete="off"
+          /></label>
+        </div>
+        <div id="operation-error" class="notice error" role="alert" hidden></div>
+        <div class="dialog-actions">
+          <button class="button secondary" type="button" data-close>Отмена</button
+          ><button id="operation-submit" class="button primary" type="submit">
+            Оформить приход
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="warehouse-dialog" aria-labelledby="warehouse-title">
+      <form id="warehouse-form">
+        <div class="dialog-heading">
+          <h2 id="warehouse-title">Новый фулфилмент</h2>
+          <button class="close-button" type="button" data-close aria-label="Закрыть">×</button>
+        </div>
+        <label class="field"
+          >Название ФФ<input name="name" maxlength="80" required autocomplete="off"
+        /></label>
+        <div id="warehouse-error" class="notice error" role="alert" hidden></div>
+        <div class="dialog-actions">
+          <button class="button secondary" type="button" data-close>Отмена</button
+          ><button class="button primary" type="submit">Сохранить</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="confirm-dialog" aria-labelledby="confirm-title">
+      <form id="confirm-form">
+        <div class="dialog-heading">
+          <h2 id="confirm-title">Подтверждение</h2>
+          <button class="close-button" type="button" data-close aria-label="Закрыть">×</button>
+        </div>
+        <p id="confirm-description" class="confirm-description"></p>
+        <div id="confirm-error" class="notice error" role="alert" hidden></div>
+        <div class="dialog-actions">
+          <button class="button secondary" type="button" data-close>Назад</button
+          ><button id="confirm-submit" class="button primary" type="submit">Подтвердить</button>
+        </div>
+      </form>
+    </dialog>
+    <div id="toast" class="toast" role="status" hidden></div>
+  </body>
+</html>
